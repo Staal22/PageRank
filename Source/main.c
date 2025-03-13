@@ -23,23 +23,27 @@ int main(int argc, char** argv)
     int small_graph_nodes;
     double** small_graph;
     read_graph_from_file1(example_graph_path, &small_graph_nodes, &small_graph);
-    printf("Number of pages: %d \n", small_graph_nodes);
-    for (int i = 0; i < small_graph_nodes; i++)
-    {
-        for (int j = 0; j < small_graph_nodes; j++)
-        {
-            printf(" %lf", small_graph[i][j]);
-        }
-        printf("\n");
-    }
+    // printf("Number of pages: %d \n", small_graph_nodes);
+    // for (int i = 0; i < small_graph_nodes; i++)
+    // {
+    //     for (int j = 0; j < small_graph_nodes; j++)
+    //     {
+    //         printf(" %lf", small_graph[i][j]);
+    //     }
+    //     printf("\n");
+    // }
 
     double* scores = malloc(small_graph_nodes * sizeof(double));
     PageRank_iterations1(small_graph_nodes, small_graph, damping, epsilon, scores);
-    printf("PageRank scores: ");
-    for (int i = 0; i < small_graph_nodes; ++i)
-    {
-        printf(" %lf", scores[i]);
-    }
+    // printf("PageRank scores: ");
+    // for (int i = 0; i < small_graph_nodes; ++i)
+    // {
+    //     printf(" %lf", scores[i]);
+    // }
+
+    const int top = small_graph_nodes;
+    top_n_webpages(small_graph_nodes, scores, top);
+
     free(scores);
 
     int large_graph_nodes;
@@ -317,6 +321,32 @@ void PageRank_iterations2(int N, int* row_ptr, int* col_idx, double* val, double
 {
 }
 
+// Descending order
+int comp(const void* a, const void* b)
+{
+    const double diff = **(double**) b - **(double**) a;
+    if (diff > 0) return 1;
+    if (diff < 0) return -1;
+    return 0;
+}
+
 void top_n_webpages(int N, double* scores, int n)
 {
+    if (scores == NULL) return;
+
+    // Sort array of pointers to scores, to easily be able to retrieve original index
+    double** score_pointers = malloc(N * sizeof(double*));
+    for (int i = 0; i < N; ++i)
+    {
+        score_pointers[i] = &scores[i];
+    }
+    qsort(score_pointers, N, sizeof(double), comp);
+
+    printf("Top %d pages, sorted according to PageRank score:\n", n);
+    for (int i = 0; i < n; ++i)
+    {
+        printf("Score [%lf] Index [%ld]\n", *score_pointers[i], score_pointers[i] - scores);
+    }
+
+    free(score_pointers);
 }
