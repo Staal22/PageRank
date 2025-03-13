@@ -1,6 +1,8 @@
 ﻿#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
+
 #include "function_declarations.h"
 
 int main(int argc, char** argv)
@@ -10,28 +12,41 @@ int main(int argc, char** argv)
         printf("argv[%d]: %s\n", i, argv[i]);
     }
 
-    char* example_graph = "../../Graphs/simple-webgraph.txt";
-    char* small_graph = "../../Graphs/100nodes_graph.txt";
-    char* large_graph = "../../Graphs/web-stanford.txt";
+    char* example_graph_path = "../../Graphs/simple-webgraph.txt";
+    char* small_graph_path = "../../Graphs/100nodes_graph.txt";
+    char* large_graph_path = "../../Graphs/web-stanford.txt";
 
-    int nr_pages1;
-    double** graph1;
-    read_graph_from_file1(example_graph, &nr_pages1, &graph1);
-    printf("Number of pages: %d \n", nr_pages1);
-    for (int i = 0; i < nr_pages1; i++)
+    const double damping = 1.0;
+    const double epsilon = 0.000001;
+
+    // --- Small graph ---
+    int small_graph_nodes;
+    double** small_graph;
+    read_graph_from_file1(example_graph_path, &small_graph_nodes, &small_graph);
+    printf("Number of pages: %d \n", small_graph_nodes);
+    for (int i = 0; i < small_graph_nodes; i++)
     {
-        for (int j = 0; j < nr_pages1; j++)
+        for (int j = 0; j < small_graph_nodes; j++)
         {
-            printf(" %lf", graph1[i][j]);
+            printf(" %lf", small_graph[i][j]);
         }
         printf("\n");
     }
 
-    int nr_pages2;
+    double* scores = malloc(small_graph_nodes * sizeof(double));
+    PageRank_iterations1(small_graph_nodes, small_graph, damping, epsilon, scores);
+    printf("PageRank scores: ");
+    for (int i = 0; i < small_graph_nodes; ++i)
+    {
+        printf(" %lf", scores[i]);
+    }
+    free(scores);
+
+    int large_graph_nodes;
     int* rows;
     int* cols;
     double* vals;
-    read_graph_from_file2(example_graph, &nr_pages2, &rows, &cols, &vals);
+    // read_graph_from_file2(large_graph_path, &large_graph_nodes, &rows, &cols, &vals);
     // printf("Number of pages: %d \n", pages1);
     // for (int i = 0; i < pages1; i++)
     // {
@@ -42,11 +57,11 @@ int main(int argc, char** argv)
     //     printf("\n");
     // }
 
-    const int error = omp_pagerank(argc, argv);
-    if (error != 0)
-    {
-        printf("OMP PageRank failed\n");
-    }
+    // const int error = omp_pagerank(argc, argv);
+    // if (error != 0)
+    // {
+    //     printf("OMP PageRank failed\n");
+    // }
 
     return 0;
 }
@@ -219,8 +234,83 @@ void read_graph_from_file2(char* filename, int* N, int** row_ptr, int** col_idx,
 {
 }
 
-void PageRank_iterations1(int N, double*** hyperlink_matrix, double d, double epsilon, double* scores)
+void PageRank_iterations1(const int N, double** hyperlink_matrix, double d, double epsilon, double* scores)
 {
+    if (scores == NULL) return;
+
+    for (int i = 0; i < N; ++i)
+    {
+        scores[i] = 1.0 / N;
+    }
+
+    char dangling_flag = 0;
+    char* dangling_indexes = calloc(N, sizeof(char));
+    for (int i = 0; i < N; ++i)
+    {
+        double col_sum = 0.0;
+        for (int j = 0; j < N; ++j)
+        {
+            col_sum += hyperlink_matrix[j][i];
+        }
+        if (col_sum == 0.0)
+        {
+            dangling_indexes[i] = 1;
+            if (!dangling_flag) dangling_flag = 1;
+        }
+    }
+
+    double diff = 100.0;
+    double* old_scores = malloc(N * sizeof(double));
+
+    while (diff > epsilon)
+    {
+        // Calculate sum of scores for dangling pages
+        double dangling_scores = 0.0;
+        if (dangling_flag)
+        {
+            for (int i = 0; i < N; ++i)
+            {
+                if (dangling_indexes[i] == 1)
+                {
+                    dangling_scores += scores[i];
+                }
+            }
+        }
+
+        // Copy of old scores for diff
+        memcpy(old_scores, scores, N * sizeof(double));
+
+        // Zero out scores for the new iteration
+        for (int i = 0; i < N; ++i)
+        {
+            scores[i] = (1 - d + d * dangling_scores) / N;
+        }
+
+        // Contribution from incoming edges
+        for (int j = 0; j < N; ++j)
+        {
+            if (dangling_indexes[j] == 0) // Skip dangling nodes
+            {
+                for (int i = 0; i < N; ++i)
+                {
+                    if (hyperlink_matrix[i][j] > 0)
+                    {
+                        scores[i] += d * hyperlink_matrix[i][j] * old_scores[j];
+                    }
+                }
+            }
+        }
+
+        // Calculate diff for convergence check
+        diff = 0.0;
+        for (int i = 0; i < N; ++i)
+        {
+            diff += fabs(scores[i] - old_scores[i]);
+        }
+    }
+
+    free(dangling_indexes);
+    free(old_scores);
 }
 
 void PageRank_iterations2(int N, int* row_ptr, int* col_idx, double* val, double d, double epsilon, double* scores)
