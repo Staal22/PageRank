@@ -1,6 +1,5 @@
 # Jetbrains
 .idea
-.qodo
 
 # Binaries & CMake stuff
 **/cmake-build-debug
