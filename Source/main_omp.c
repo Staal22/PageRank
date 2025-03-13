@@ -1,4 +1,5 @@
 ﻿#include <stdio.h>
+#include <omp.h>
 #include "function_declarations.h"
 
 int omp_pagerank(int argc, char** argv)
@@ -6,6 +7,16 @@ int omp_pagerank(int argc, char** argv)
     for (int i = 0; i < argc; ++i)
     {
         printf("argv[%d]: %s\n", i, argv[i]);
+    }
+
+#pragma omp parallel default(none)
+    {
+#pragma omp single
+        {
+            printf("Total threads: %d\n", omp_get_num_threads());
+        }
+        printf("Hello World... from thread = %d\n",
+               omp_get_thread_num());
     }
 
     return 0;
