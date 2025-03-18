@@ -2,8 +2,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-
+#include <omp.h>
 #include "function_declarations.h"
+
+// Descending order
+int comp(const void* a, const void* b)
+{
+    const double diff = **(double**) b - **(double**) a;
+    if (diff > 0) return 1;
+    if (diff < 0) return -1;
+    return 0;
+}
 
 int main(int argc, char** argv)
 {
@@ -16,50 +25,43 @@ int main(int argc, char** argv)
     char* small_graph_path = "../../Graphs/100nodes_graph.txt";
     char* large_graph_path = "../../Graphs/web-stanford.txt";
 
-    const double damping = 1.0;
-    const double epsilon = 0.000001;
+    const double damping = 0.85;
+    const double epsilon = 0.0000001;
 
     // --- Small graph ---
     int small_graph_nodes;
     double** small_graph;
-    read_graph_from_file1(example_graph_path, &small_graph_nodes, &small_graph);
-    // printf("Number of pages: %d \n", small_graph_nodes);
-    // for (int i = 0; i < small_graph_nodes; i++)
-    // {
-    //     for (int j = 0; j < small_graph_nodes; j++)
-    //     {
-    //         printf(" %lf", small_graph[i][j]);
-    //     }
-    //     printf("\n");
-    // }
+    read_graph_from_file1(small_graph_path, &small_graph_nodes, &small_graph);
+    printf("Number of pages: %d \n", small_graph_nodes);
 
-    double* scores = malloc(small_graph_nodes * sizeof(double));
-    PageRank_iterations1(small_graph_nodes, small_graph, damping, epsilon, scores);
-    // printf("PageRank scores: ");
-    // for (int i = 0; i < small_graph_nodes; ++i)
-    // {
-    //     printf(" %lf", scores[i]);
-    // }
+    double* small_scores = malloc(small_graph_nodes * sizeof(double));
+    PageRank_iterations1(small_graph_nodes, small_graph, damping, epsilon, small_scores);
 
-    const int top = small_graph_nodes;
-    top_n_webpages(small_graph_nodes, scores, top);
+    top_n_webpages(small_graph_nodes, small_scores, 10);
 
-    free(scores);
-
+    // -- Large graph ---
     int large_graph_nodes;
     int* rows;
     int* cols;
     double* vals;
-    // read_graph_from_file2(large_graph_path, &large_graph_nodes, &rows, &cols, &vals);
-    // printf("Number of pages: %d \n", pages1);
-    // for (int i = 0; i < pages1; i++)
-    // {
-    //     for (int j = 0; j < pages1; j++)
-    //     {
-    //         printf(" %lf", graph1[i][j]);
-    //     }
-    //     printf("\n");
-    // }
+    read_graph_from_file2(large_graph_path, &large_graph_nodes, &rows, &cols, &vals);
+    printf("Number of pages: %d \n", large_graph_nodes);
+
+    double* large_scores = realloc(small_scores, large_graph_nodes * sizeof(double));
+    if (!large_scores)
+    {
+        free(small_scores);
+        exit(1);
+    }
+
+    PageRank_iterations2(large_graph_nodes, rows, cols, vals, damping, epsilon, large_scores);
+
+    top_n_webpages(large_graph_nodes, large_scores, 10);
+
+    free(rows);
+    free(cols);
+    free(vals);
+    free(large_scores);
 
     // const int error = omp_pagerank(argc, argv);
     // if (error != 0)
@@ -112,7 +114,7 @@ void read_graph_from_file1(char* filename, int* N, double*** hyperlink_matrix)
 
             // Clear the remainder of the current line
             int c;
-            while ((c = fgetc(file)) != '\n' && c != EOF);
+            while ((c = fgetc(file)) != '\n' && c != EOF) {}
             continue;
         }
 
@@ -139,9 +141,6 @@ void read_graph_from_file1(char* filename, int* N, double*** hyperlink_matrix)
         fclose(file);
         exit(1);
     }
-
-    // Rewind the file to start reading the edges
-    rewind(file);
 
     // Allocate memory for the hyperlink matrix
     *hyperlink_matrix = (double**) malloc(*N * sizeof(double*));
@@ -171,6 +170,9 @@ void read_graph_from_file1(char* filename, int* N, double*** hyperlink_matrix)
         }
     }
 
+    // Rewind the file to start reading the edges
+    rewind(file);
+
     // Read the edges and fill the matrix
     int from_node, to_node;
     while (fgets(line, max_buffer_size, file) != NULL)
@@ -180,7 +182,7 @@ void read_graph_from_file1(char* filename, int* N, double*** hyperlink_matrix)
         {
             // Skip the rest of this line
             int c;
-            while ((c = fgetc(file)) != '\n' && c != EOF);
+            while ((c = fgetc(file)) != '\n' && c != EOF) {}
             continue;
         }
 
@@ -236,17 +238,278 @@ void read_graph_from_file1(char* filename, int* N, double*** hyperlink_matrix)
 
 void read_graph_from_file2(char* filename, int* N, int** row_ptr, int** col_idx, double** val)
 {
+    FILE* file = fopen(filename, "r");
+    if (file == NULL)
+    {
+        printf("Error opening file %s\n", filename);
+        exit(1);
+    }
+
+    // Read the file to find the number of nodes
+    *N = 0;
+    int max_buffer_size = 1024;
+    // ReSharper disable once CppDFAMemoryLeak / idk what it's yapping about here - valgrind says no leaks
+    char* line = malloc(max_buffer_size * sizeof(char));
+    if (line == NULL)
+    {
+        printf("Memory allocation failed for line buffer\n");
+        free(line);
+        fclose(file);
+        exit(1);
+    }
+
+    // Skip comment lines and find the line with "Nodes: X"
+    while (fgets(line, max_buffer_size, file) != NULL)
+    {
+        // Check if the line was completely read (contains newline)
+        if (strchr(line, '\n') == NULL && !feof(file))
+        {
+            // Line was too long for our buffer, resize and read the rest
+            const int new_size = max_buffer_size * 2;
+            char* new_line = realloc(line, new_size);
+            if (new_line == NULL)
+            {
+                printf("Memory reallocation failed for line buffer\n");
+                free(line);
+                fclose(file);
+                exit(1);
+            }
+            line = new_line;
+            free(new_line);
+            max_buffer_size = new_size;
+
+            // Clear the remainder of the current line
+            int c;
+            while ((c = fgetc(file)) != '\n' && c != EOF) {}
+            continue;
+        }
+
+        if (line[0] == '#')
+        {
+            // Check if this comment line contains the number of nodes
+            if (strstr(line, "Nodes:") != NULL)
+            {
+                sscanf(line, "# Nodes: %d", N);
+            }
+        }
+        else
+        {
+            // First non-comment line, break
+            break;
+        }
+    }
+
+    // If N wasn't found or is invalid, exit
+    if (*N <= 0)
+    {
+        printf("Error: Could not determine the number of nodes\n");
+        free(line);
+        fclose(file);
+        exit(1);
+    }
+
+    int* out_degree = calloc(*N, sizeof(int));
+    int* in_edges_count = calloc(*N, sizeof(int));
+    if (out_degree == NULL || in_edges_count == NULL)
+    {
+        printf("Memory allocation failed for out_degree or in_edges_count\n");
+        free(out_degree);
+        free(in_edges_count);
+        free(line);
+        fclose(file);
+        exit(1);
+    }
+
+    // First pass to count out_degree and in_edges_count
+    rewind(file);
+    while (fgets(line, max_buffer_size, file) != NULL)
+    {
+        if (strchr(line, '\n') == NULL && !feof(file))
+        {
+            const int new_size = max_buffer_size * 2;
+            char* new_line = realloc(line, new_size);
+            if (new_line == NULL)
+            {
+                printf("Memory reallocation failed for line buffer\n");
+                free(line);
+                fclose(file);
+                exit(1);
+            }
+            line = new_line;
+            free(new_line);
+            max_buffer_size = new_size;
+            int c;
+            while ((c = fgetc(file)) != '\n' && c != EOF) {}
+            continue;
+        }
+
+        if (line[0] == '#') continue;
+
+        int from_node, to_node;
+        if (sscanf(line, "%d %d", &from_node, &to_node) == 2)
+        {
+            if (from_node >= 0 && from_node < *N && to_node >= 0 && to_node < *N)
+            {
+                out_degree[from_node]++;
+                in_edges_count[to_node]++;
+            }
+        }
+    }
+
+    // Allocate in_edges
+    int** in_edges = malloc(*N * sizeof(int*));
+    if (in_edges == NULL)
+    {
+        printf("Memory allocation failed for in_edges\n");
+        free(out_degree);
+        free(in_edges_count);
+        free(line);
+        fclose(file);
+        exit(1);
+    }
+
+    for (int i = 0; i < *N; i++)
+    {
+        if (in_edges_count[i] > 0)
+        {
+            in_edges[i] = malloc(in_edges_count[i] * sizeof(int));
+            if (in_edges[i] == NULL)
+            {
+                printf("Memory allocation failed for in_edges[%d]\n", i);
+                for (int j = 0; j < i; j++) free(in_edges[j]);
+                free(in_edges);
+                free(out_degree);
+                free(in_edges_count);
+                free(line);
+                fclose(file);
+                exit(1);
+            }
+        }
+        else
+        {
+            in_edges[i] = NULL;
+        }
+    }
+
+    int* current = calloc(*N, sizeof(int));
+    if (current == NULL)
+    {
+        printf("Memory allocation failed for current array\n");
+        for (int i = 0; i < *N; i++) free(in_edges[i]);
+        free(in_edges);
+        free(out_degree);
+        free(in_edges_count);
+        free(line);
+        fclose(file);
+        exit(1);
+    }
+
+    // Second pass to fill in_edges
+    rewind(file);
+    while (fgets(line, max_buffer_size, file) != NULL)
+    {
+        if (strchr(line, '\n') == NULL && !feof(file))
+        {
+            const int new_size = max_buffer_size * 2;
+            char* new_line = realloc(line, new_size);
+            if (new_line == NULL)
+            {
+                printf("Memory reallocation failed for line buffer\n");
+                free(line);
+                fclose(file);
+                exit(1);
+            }
+            line = new_line;
+            free(new_line);
+            max_buffer_size = new_size;
+            int c;
+            while ((c = fgetc(file)) != '\n' && c != EOF) {}
+            continue;
+        }
+
+        if (line[0] == '#') continue;
+
+        int from_node, to_node;
+        if (sscanf(line, "%d %d", &from_node, &to_node) == 2)
+        {
+            if (from_node >= 0 && from_node < *N && to_node >= 0 && to_node < *N)
+            {
+                in_edges[to_node][current[to_node]++] = from_node;
+            }
+        }
+    }
+
+    // Build CRS arrays
+    *row_ptr = malloc((*N + 1) * sizeof(int));
+    if (*row_ptr == NULL)
+    {
+        printf("Memory allocation failed for row_ptr\n");
+        for (int i = 0; i < *N; i++) free(in_edges[i]);
+        free(in_edges);
+        free(out_degree);
+        free(in_edges_count);
+        free(current);
+        free(line);
+        fclose(file);
+        exit(1);
+    }
+
+    (*row_ptr)[0] = 0;
+    for (int i = 0; i < *N; i++)
+    {
+        (*row_ptr)[i + 1] = (*row_ptr)[i] + in_edges_count[i];
+    }
+
+    const int nnz = (*row_ptr)[*N];
+    *col_idx = malloc(nnz * sizeof(int));
+    *val = malloc(nnz * sizeof(double));
+    if (*col_idx == NULL || *val == NULL)
+    {
+        printf("Memory allocation failed for col_idx or val\n");
+        free(*row_ptr);
+        for (int i = 0; i < *N; i++) free(in_edges[i]);
+        free(in_edges);
+        free(out_degree);
+        free(in_edges_count);
+        free(current);
+        free(line);
+        fclose(file);
+        exit(1);
+    }
+
+    int k = 0;
+    for (int i = 0; i < *N; i++)
+    {
+        for (int m = 0; m < in_edges_count[i]; m++)
+        {
+            int j = in_edges[i][m];
+            (*col_idx)[k] = j;
+            (*val)[k] = 1.0 / out_degree[j];
+            k++;
+        }
+    }
+
+    // Clean up
+    for (int i = 0; i < *N; i++) free(in_edges[i]);
+    free(in_edges);
+    free(out_degree);
+    free(in_edges_count);
+    free(current);
+    free(line);
+    fclose(file);
 }
 
-void PageRank_iterations1(const int N, double** hyperlink_matrix, double d, double epsilon, double* scores)
+void PageRank_iterations1(const int N, double** hyperlink_matrix, const double d, const double epsilon, double* scores)
 {
     if (scores == NULL) return;
 
+    // Initialize scores to 1/N
     for (int i = 0; i < N; ++i)
     {
         scores[i] = 1.0 / N;
     }
 
+    // Find dangling nodes
     char dangling_flag = 0;
     char* dangling_indexes = calloc(N, sizeof(char));
     for (int i = 0; i < N; ++i)
@@ -284,7 +547,6 @@ void PageRank_iterations1(const int N, double** hyperlink_matrix, double d, doub
         // Copy of old scores for diff
         memcpy(old_scores, scores, N * sizeof(double));
 
-        // Zero out scores for the new iteration
         for (int i = 0; i < N; ++i)
         {
             scores[i] = (1 - d + d * dangling_scores) / N;
@@ -317,22 +579,118 @@ void PageRank_iterations1(const int N, double** hyperlink_matrix, double d, doub
     free(old_scores);
 }
 
-void PageRank_iterations2(int N, int* row_ptr, int* col_idx, double* val, double d, double epsilon, double* scores)
+void PageRank_iterations2(const int N, const int* row_ptr, const int* col_idx, const double* val, const double d,
+                          const double epsilon, double* scores)
 {
+    if (scores == NULL) return;
+
+    // Initialize scores to 1/N
+    for (int i = 0; i < N; ++i)
+    {
+        scores[i] = 1.0 / N;
+    }
+
+    // Determine dangling nodes
+    char* dangling_indexes = calloc(N, sizeof(char));
+
+    // Initialize all as potentially dangling
+    for (int j = 0; j < N; ++j)
+    {
+        dangling_indexes[j] = 1;
+    }
+
+    // Mark nodes that have outgoing edges
+    int nnz = row_ptr[N];
+    for (int k = 0; k < nnz; ++k)
+    {
+        int j = col_idx[k];
+        dangling_indexes[j] = 0; // Not a dangling node
+    }
+
+    // Check if there are any dangling nodes
+    char dangling_flag = 0;
+    for (int j = 0; j < N; ++j)
+    {
+        if (dangling_indexes[j])
+        {
+            dangling_flag = 1;
+            break;
+        }
+    }
+
+    double* old_scores = malloc(N * sizeof(double));
+    if (old_scores == NULL)
+    {
+        free(dangling_indexes);
+        return;
+    }
+
+    double diff = 100.0;
+    while (diff > epsilon)
+    {
+        // Calculate sum of scores from dangling pages
+        double dangling_sum = 0.0;
+
+        if (dangling_flag)
+        {
+#pragma omp parallel for reduction(+:dangling_sum)
+            for (int j = 0; j < N; ++j)
+            {
+                if (dangling_indexes[j])
+                {
+                    dangling_sum += scores[j];
+                }
+            }
+        }
+
+        // Save current scores to old_scores
+        memcpy(old_scores, scores, N * sizeof(double));
+
+        // Set new scores base value
+        const double base = (1.0 - d + d * dangling_sum) / N;
+        for (int i = 0; i < N; ++i)
+        {
+            scores[i] = base;
+        }
+
+        // Add contributions from incoming edges
+#pragma omp parallel for reduction(+:scores[:N])
+        for (int i = 0; i < N; ++i)
+        {
+            const int start = row_ptr[i];
+            const int end = row_ptr[i + 1];
+            for (int k = start; k < end; ++k)
+            {
+                int j = col_idx[k]; // j is the source node with a link to i
+                scores[i] += d * val[k] * old_scores[j];
+            }
+        }
+
+        // Compute the difference between new and old scores
+        diff = 0.0;
+#pragma omp parallel for reduction(+:diff)
+        for (int i = 0; i < N; ++i)
+        {
+            diff += fabs(scores[i] - old_scores[i]);
+        }
+    }
+
+    free(dangling_indexes);
+    free(old_scores);
 }
 
-// Descending order
-int comp(const void* a, const void* b)
-{
-    const double diff = **(double**) b - **(double**) a;
-    if (diff > 0) return 1;
-    if (diff < 0) return -1;
-    return 0;
-}
-
+/**
+ * List the top n webpages
+ *
+ * @param N total number of webpages (length of scores)
+ * @param scores array of PageRank scores
+ * @param n how many webpages to list
+*/
 void top_n_webpages(int N, double* scores, int n)
 {
     if (scores == NULL) return;
+
+    if (n > N) n = N;
 
     // Sort array of pointers to scores, to easily be able to retrieve original index
     double** score_pointers = malloc(N * sizeof(double*));
