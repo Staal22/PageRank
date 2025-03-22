@@ -1,8 +1,8 @@
-﻿#include <stdio.h>
+﻿#include <omp.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <omp.h>
 #include "function_declarations.h"
 
 // Descending order
@@ -14,21 +14,58 @@ int comp(const void* a, const void* b)
     return 0;
 }
 
+void remove_argument(int* argc, char* argv[], const int n)
+{
+    // Check if the index is valid
+    if (n < 1 || n >= *argc)
+    {
+        printf("Invalid index to remove.\n");
+        return;
+    }
+
+    // Shift elements to the left
+    for (int i = n; i < *argc - 1; i++)
+    {
+        argv[i] = argv[i + 1];
+    }
+
+    // Decrease the argument count
+    (*argc)--;
+
+    // Null-terminate the last element
+    argv[*argc] = NULL;
+}
+
 int main(int argc, char** argv)
 {
+    printf("--- Pagerank ---\n");
+    printf("Commandline arguments:\n");
     for (int i = 0; i < argc; ++i)
     {
         printf("argv[%d]: %s\n", i, argv[i]);
     }
+    printf("\n");
 
-    char* example_graph_path = "../../Graphs/simple-webgraph.txt";
-    char* small_graph_path = "../../Graphs/100nodes_graph.txt";
-    char* large_graph_path = "../../Graphs/web-stanford.txt";
+    // Read arguments
+    const char* small_graph_name = argv[1]; // "100nodes_graph.txt";
+    const char* large_graph_name = argv[2]; // "web-stanford.txt";
+    const double damping = atof(argv[3]);   // 0.85
+    const double epsilon = atof(argv[4]);   // 0.0000001;
+    const int top_pages = atoi(argv[5]);    // 10;
 
-    const double damping = 0.85;
-    const double epsilon = 0.0000001;
+    // Concatenate strings to include full path
+    const char* graphs_path = "../../Graphs/";
+    const size_t small_graph_path_length = strlen(graphs_path) + strlen(argv[1]) + 1;
+    const size_t large_graph_path_length = strlen(graphs_path) + strlen(argv[2]) + 1;
+    char* small_graph_path = malloc(small_graph_path_length);
+    char* large_graph_path = malloc(large_graph_path_length);
+    strcpy(small_graph_path, graphs_path);
+    strcat(small_graph_path, small_graph_name);
+    strcpy(large_graph_path, graphs_path);
+    strcat(large_graph_path, large_graph_name);
 
     // --- Small graph ---
+    printf("Small graph\n");
     int small_graph_nodes;
     double** small_graph;
     read_graph_from_file1(small_graph_path, &small_graph_nodes, &small_graph);
@@ -37,9 +74,12 @@ int main(int argc, char** argv)
     double* small_scores = malloc(small_graph_nodes * sizeof(double));
     PageRank_iterations1(small_graph_nodes, small_graph, damping, epsilon, small_scores);
 
-    top_n_webpages(small_graph_nodes, small_scores, 10);
+    top_n_webpages(small_graph_nodes, small_scores, top_pages);
+
+    printf("\n");
 
     // -- Large graph ---
+    printf("Large graph\n");
     int large_graph_nodes;
     int* rows;
     int* cols;
@@ -56,18 +96,24 @@ int main(int argc, char** argv)
 
     PageRank_iterations2(large_graph_nodes, rows, cols, vals, damping, epsilon, large_scores);
 
-    top_n_webpages(large_graph_nodes, large_scores, 10);
+    top_n_webpages(large_graph_nodes, large_scores, top_pages);
 
+    free(small_graph_path);
+    free(large_graph_path);
     free(rows);
     free(cols);
     free(vals);
     free(large_scores);
 
-    // const int error = omp_pagerank(argc, argv);
-    // if (error != 0)
-    // {
-    //     printf("OMP PageRank failed\n");
-    // }
+    // Remove the small graph from argv (shift other elements to the left)
+    remove_argument(&argc, argv, 1);
+
+    printf("\n");
+    const int error = omp_pagerank(argc, argv);
+    if (error != 0)
+    {
+        printf("OMP PageRank failed\n");
+    }
 
     return 0;
 }
@@ -694,6 +740,7 @@ void top_n_webpages(int N, double* scores, int n)
 
     // Sort array of pointers to scores, to easily be able to retrieve original index
     double** score_pointers = malloc(N * sizeof(double*));
+#pragma omp parallel for
     for (int i = 0; i < N; ++i)
     {
         score_pointers[i] = &scores[i];
