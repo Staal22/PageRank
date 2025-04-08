@@ -703,9 +703,23 @@ void PageRank_iterations2(const int N, const int* row_ptr, const int* col_idx, c
         }
 
         // Add contributions from incoming edges
+#ifdef _MSC_VER // Disgusting MSVC version
         int i;
+#pragma omp parallel for
+        for (i = 0; i < N; ++i) {
+            const int start = row_ptr[i];
+            const int end = row_ptr[i + 1];
+            for (int k = start; k < end; ++k)
+            {
+                int j = col_idx[k]; // j is the source node with a link to i
+                double contribution = d * val[k] * old_scores[j];
+#pragma omp atomic
+                scores[i] += contribution;
+            }
+        }
+#else // Based gcc/clang version
 #pragma omp parallel for reduction(+:scores[:N])
-        for (i = 0; i < N; ++i)
+        for (int i = 0; i < N; ++i)
         {
             const int start = row_ptr[i];
             const int end = row_ptr[i + 1];
@@ -715,6 +729,7 @@ void PageRank_iterations2(const int N, const int* row_ptr, const int* col_idx, c
                 scores[i] += d * val[k] * old_scores[j];
             }
         }
+#endif
 
         // Compute the difference between new and old scores
         diff = 0.0;
@@ -756,7 +771,7 @@ void top_n_webpages(int N, double* scores, int n)
     printf("Top %d pages, sorted according to PageRank score:\n", n);
     for (int j = 0; j < n; ++j)
     {
-        printf("Score [%lf] Index [%ld]\n", *score_pointers[j], score_pointers[j] - scores);
+        printf("Score [%lf] Index [%zu]\n", *score_pointers[j], (size_t) (score_pointers[j] - scores));
     }
 
     free(score_pointers);
