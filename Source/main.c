@@ -4,6 +4,9 @@
 #include <math.h>
 #include "function_declarations.h"
 
+// ReSharper disable CppJoinDeclarationAndAssignment
+// The wonderful world of MSVC. Because C99 support is too modern I suppose
+
 // Descending order
 int comp(const void* a, const void* b)
 {
@@ -678,8 +681,9 @@ void PageRank_iterations2(const int N, const int* row_ptr, const int* col_idx, c
 
         if (dangling_flag)
         {
+            int j;
 #pragma omp parallel for reduction(+:dangling_sum)
-            for (int j = 0; j < N; ++j)
+            for (j = 0; j < N; ++j)
             {
                 if (dangling_indexes[j])
                 {
@@ -699,8 +703,9 @@ void PageRank_iterations2(const int N, const int* row_ptr, const int* col_idx, c
         }
 
         // Add contributions from incoming edges
+        int i;
 #pragma omp parallel for reduction(+:scores[:N])
-        for (int i = 0; i < N; ++i)
+        for (i = 0; i < N; ++i)
         {
             const int start = row_ptr[i];
             const int end = row_ptr[i + 1];
@@ -713,10 +718,11 @@ void PageRank_iterations2(const int N, const int* row_ptr, const int* col_idx, c
 
         // Compute the difference between new and old scores
         diff = 0.0;
+        int j;
 #pragma omp parallel for reduction(+:diff)
-        for (int i = 0; i < N; ++i)
+        for (j = 0; j < N; ++j)
         {
-            diff += fabs(scores[i] - old_scores[i]);
+            diff += fabs(scores[j] - old_scores[j]);
         }
     }
 
@@ -739,17 +745,18 @@ void top_n_webpages(int N, double* scores, int n)
 
     // Sort array of pointers to scores, to easily be able to retrieve original index
     double** score_pointers = malloc(N * sizeof(double*));
+    int i;
 #pragma omp parallel for
-    for (int i = 0; i < N; ++i)
+    for (i = 0; i < N; ++i)
     {
         score_pointers[i] = &scores[i];
     }
     qsort(score_pointers, N, sizeof(double), comp);
 
     printf("Top %d pages, sorted according to PageRank score:\n", n);
-    for (int i = 0; i < n; ++i)
+    for (int j = 0; j < n; ++j)
     {
-        printf("Score [%lf] Index [%ld]\n", *score_pointers[i], score_pointers[i] - scores);
+        printf("Score [%lf] Index [%ld]\n", *score_pointers[j], score_pointers[j] - scores);
     }
 
     free(score_pointers);
