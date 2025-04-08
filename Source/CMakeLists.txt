@@ -3,6 +3,8 @@ project(PageRank C)
 
 set(CMAKE_C_STANDARD 17)
 
+enable_testing()
+
 find_package(OpenMP)
 if (OpenMP_FOUND)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
@@ -36,3 +38,13 @@ endif ()
 if (MATH_LIBRARY)
     target_link_libraries(PageRank PUBLIC ${MATH_LIBRARY})
 endif ()
+
+add_executable(validate_pagerank tests/validate_pagerank.c)
+
+add_test(
+        NAME pagerank_validation
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_validation.cmake
+)
+
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../Graphs/simple-webgraph.txt
+        DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
