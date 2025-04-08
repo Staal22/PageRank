@@ -1,7 +1,7 @@
 execute_process(
         COMMAND ${CMAKE_CURRENT_BINARY_DIR}/PageRank
-        ${CMAKE_CURRENT_BINARY_DIR}/simple-webgraph.txt
-        ${CMAKE_CURRENT_BINARY_DIR}/simple-webgraph.txt
+        simple-webgraph.txt
+        simple-webgraph.txt
         1 0.0000001 10
         OUTPUT_FILE ${CMAKE_CURRENT_BINARY_DIR}/pagerank_output.txt
         OUTPUT_VARIABLE out

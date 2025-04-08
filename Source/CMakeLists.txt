@@ -20,6 +20,7 @@ else ()
 endif ()
 
 set(CMAKE_BUILD_TYPE Release)
+#set(CMAKE_BUILD_TYPE Debug)
 # Set compiler flags with platform checks
 if (CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -march=native -fomit-frame-pointer -flto")
@@ -45,6 +46,3 @@ add_test(
         NAME pagerank_validation
         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_validation.cmake
 )
-
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../Graphs/simple-webgraph.txt
-        DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
