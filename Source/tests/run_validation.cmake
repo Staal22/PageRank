@@ -3,7 +3,6 @@ execute_process(
         simple-webgraph.txt
         simple-webgraph.txt
         1 0.0000001 10
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         OUTPUT_FILE ${CMAKE_CURRENT_BINARY_DIR}/pagerank_output.txt
         OUTPUT_VARIABLE out
         ERROR_VARIABLE err

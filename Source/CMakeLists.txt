@@ -46,3 +46,9 @@ add_test(
         NAME pagerank_validation
         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_validation.cmake
 )
+
+if (DEFINED ENV{GITHUB_ACTIONS})
+    set_tests_properties(pagerank_validation PROPERTIES
+            ENVIRONMENT "GRAPH_DIR=../Graphs/"
+    )
+endif ()

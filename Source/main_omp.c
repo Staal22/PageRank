@@ -21,7 +21,8 @@ int omp_pagerank(int argc, char** argv)
     const int top_pages = atoi(argv[4]);  // 10;
 
     // Concatenate string to include full path
-    const char* graphs_path = "../../Graphs/";
+    const char* env_graph_path = getenv("GRAPH_DIR");
+    const char* graphs_path = env_graph_path ? env_graph_path : "../../Graphs/";
     const size_t graph_path_length = strlen(graphs_path) + strlen(argv[1]) + 1;
     char* graph_path = malloc(graph_path_length);
     strcpy(graph_path, graphs_path);

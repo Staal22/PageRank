@@ -56,7 +56,8 @@ int main(int argc, char** argv)
     const int top_pages = atoi(argv[5]);    // 10;
 
     // Concatenate strings to include full path
-    const char* graphs_path = "../../Graphs/";
+    const char* env_graph_path = getenv("GRAPH_DIR");
+    const char* graphs_path = env_graph_path ? env_graph_path : "../../Graphs/";
     const size_t small_graph_path_length = strlen(graphs_path) + strlen(argv[1]) + 1;
     const size_t large_graph_path_length = strlen(graphs_path) + strlen(argv[2]) + 1;
     char* small_graph_path = malloc(small_graph_path_length);
