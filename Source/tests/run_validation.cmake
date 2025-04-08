@@ -20,7 +20,7 @@ endif ()
 
 # Run the validation executable to check the results
 execute_process(
-        COMMAND ${CMAKE_CURRENT_BINARY_DIR}/validate_pagerank
+        COMMAND "${VALIDATE_EXE}"
         ${CMAKE_CURRENT_BINARY_DIR}/pagerank_output.txt
         RESULT_VARIABLE validation_result
 )
