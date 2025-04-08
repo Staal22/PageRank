@@ -7,6 +7,13 @@ execute_process(
         RESULT_VARIABLE pagerank_result
 )
 
+message(STATUS "Output: ${out}")
+message(STATUS "Error: ${err}")
+
+if (NOT result EQUAL 0)
+    message(FATAL_ERROR "PageRank execution failed with exit code: ${result}")
+endif ()
+
 # Check if PageRank ran successfully
 if (NOT pagerank_result EQUAL 0)
     message(FATAL_ERROR "PageRank execution failed with exit code: ${pagerank_result}")
