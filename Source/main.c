@@ -40,7 +40,7 @@ void remove_argument(int* argc, char* argv[], const int n)
 
 int main(int argc, char** argv)
 {
-    printf("--- Pagerank ---\n");
+    printf("--- PageRank Serial ---\n");
     printf("Commandline arguments:\n");
     for (int i = 0; i < argc; ++i)
     {

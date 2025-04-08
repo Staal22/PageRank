@@ -6,7 +6,7 @@
 
 int omp_pagerank(int argc, char** argv)
 {
-    printf("--- Pagerank OMP ---\n");
+    printf("--- PageRank OMP ---\n");
     printf("Commandline arguments:\n");
     for (int i = 0; i < argc; ++i)
     {
