@@ -42,11 +42,16 @@ endif ()
 
 add_executable(validate_pagerank tests/validate_pagerank.c)
 
-add_test(
-        NAME pagerank_validation
-        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_validation.cmake
+# Test stuff
+add_test(NAME pagerank_validation
+        COMMAND ${CMAKE_COMMAND}
+        -DPAGERANK_EXE=$<TARGET_FILE:PageRank> #MSVC multi-build moment
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_validation.cmake
 )
-
+set_tests_properties(pagerank_validation PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+# Executable in different dir on github actions build
 if (DEFINED ENV{GITHUB_ACTIONS})
     set_tests_properties(pagerank_validation PROPERTIES
             ENVIRONMENT "GRAPH_DIR=../Graphs/"
