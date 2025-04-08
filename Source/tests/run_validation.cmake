@@ -4,15 +4,13 @@ execute_process(
         ${CMAKE_CURRENT_BINARY_DIR}/simple-webgraph.txt
         1 0.0000001 10
         OUTPUT_FILE ${CMAKE_CURRENT_BINARY_DIR}/pagerank_output.txt
+        OUTPUT_VARIABLE out
+        ERROR_VARIABLE err
         RESULT_VARIABLE pagerank_result
 )
 
 message(STATUS "Output: ${out}")
 message(STATUS "Error: ${err}")
-
-if (NOT result EQUAL 0)
-    message(FATAL_ERROR "PageRank execution failed with exit code: ${result}")
-endif ()
 
 # Check if PageRank ran successfully
 if (NOT pagerank_result EQUAL 0)
